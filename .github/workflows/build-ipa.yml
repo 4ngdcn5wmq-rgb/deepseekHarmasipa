@@ -1,0 +1,51 @@
+name: Build unsigned IPA
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build (macOS, arm64, unsigned)
+    runs-on: macos-15
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Show toolchain
+        run: |
+          xcodebuild -version
+          swift --version
+
+      - name: Build app (unsigned, arm64, device)
+        run: |
+          set -o pipefail
+          xcodebuild \
+            -project HarnessClient.xcodeproj \
+            -target HarnessClient \
+            -configuration Release \
+            -sdk iphoneos \
+            ARCHS=arm64 \
+            ONLY_ACTIVE_ARCH=NO \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            -derivedDataPath build
+
+      - name: Package unsigned IPA
+        run: |
+          APP_PATH="build/Build/Products/Release-iphoneos/HarnessClient.app"
+          test -d "$APP_PATH" || { echo "App bundle not found"; exit 1; }
+          rm -rf Payload
+          mkdir -p Payload
+          cp -R "$APP_PATH" Payload/
+          zip -qry DeepSeekHarnessClient-unsigned.ipa Payload
+          ls -lh DeepSeekHarnessClient-unsigned.ipa
+
+      - name: Upload IPA artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: DeepSeekHarnessClient-unsigned-ipa
+          path: DeepSeekHarnessClient-unsigned.ipa
+          if-no-files-found: error
